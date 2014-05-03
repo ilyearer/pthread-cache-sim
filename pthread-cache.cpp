@@ -1,4 +1,5 @@
-// Compile with -pthread option
+// Author: ilyearer
+// Email: ilyearer@gmail.com
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
