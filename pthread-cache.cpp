@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 			
 			// Create new node to hold current address read from file
 			newAddress = (struct AddressNode *)malloc(sizeof(struct AddressNode));
-			newAddress->data = atoi(fileRead);
+			newAddress->data = previousAddress->data + atoi(fileRead); // Make sure address is absolute rather than relative
 			newAddress->next = NULL;
 			
 			// insert the newAddress into the end of the list
@@ -208,7 +208,76 @@ int main(int argc, char *argv[])
 			
 			numLoads++;
 		}
-	
+
+/**************** Added code ***************************/
+
+		// reset previousAddress/currentAddress to Header
+        previousAddress = &Header;
+        currentAddress = Header.next;
+
+		string sentinnel;
+
+		// determine set and block dimensions
+		numBlocks = size / block_size;
+		numSets = numBlocks / associativity;
+
+		int numThreads;
+		if(numSets >= 4)
+		{
+			numThreads = 4;
+		}
+		else
+		{
+			numThreads = numSets;
+		}
+
+		AddressNode** addressArray = new AddressNode*[numThreads];
+		//(AddressNode*) malloc(sizeof(AddressNode)*numThreads);
+		for(int i = 0; i < numThreads; i++)
+		{
+			AddressNode* head = new AddressNode;
+			head->data = i;
+			head->next = NULL;
+			addressArray[i] = head;
+		}
+
+		for(int i = 0; i < numThreads; i++)
+		{
+			cout << "Thread " << i << ": " << addressArray[i]->data << "\t" << addressArray[i] << "\t" << &addressArray[i] << endl;
+		}
+
+		// pre-sim output
+		cout << "program_name: " << input_trace_file << endl;
+		cout << "cache_size: " << size << endl;
+		cout << "block_size: " << block_size << endl;
+		cout << "associativity: " << associativity << endl;
+		cout << "total_lds: " << numLoads << endl;
+
+		cout << "Number of sets: " << numSets << endl;
+
+		while(currentAddress->next != NULL)
+		{
+			// collect next address call
+			current_address = currentAddress->data;
+
+			// move to next AddressNode for next load
+			previousAddress = currentAddress;
+			currentAddress = currentAddress->next;
+
+			// determine location to place in cache
+			setLocation = (current_address / block_size)%(numSets);
+			byteOffset = current_address % block_size;
+
+
+			cout << "Current Address: " << current_address << endl;
+			cout << "\tSet: " << setLocation << "\n\tOffset: " << byteOffset << endl;
+			getline(cin, sentinnel);
+
+		}
+
+/**************** Added code ***************************/
+		
+/*	
 		// determine set and block dimensions
 		numBlocks = size / block_size;
 		numSets = numBlocks / associativity;
@@ -310,9 +379,9 @@ int main(int argc, char *argv[])
 		cout << "cache_miss_rate: " << static_cast<float>(cache_miss)/static_cast<float>(numLoads) << endl;
 
 		cout << "Time required for execution: " << (double)(end-start)/CLOCKS_PER_SEC << " seconds." << "\n\n";
+*/
 
-
-		}
+	}
 	catch(int exception1)
 	{  // if input file is invalid
 		if( (exception1 && ifstream::failbit) != 0 )
@@ -328,12 +397,12 @@ int main(int argc, char *argv[])
 	
 	
 	currentAddress = Header.next;
-     while(currentAddress != NULL)
-     {
-         temp = currentAddress;
-         currentAddress = currentAddress->next;
-         free(temp);
-     }
+	while(currentAddress != NULL)
+	{
+		temp = currentAddress;
+		currentAddress = currentAddress->next;
+		free(temp);
+	}
 
     return 0;
 }
