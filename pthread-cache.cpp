@@ -213,8 +213,8 @@ int main(int argc, char *argv[])
 /**************** Added code ***************************/
 
 		// reset previousAddress/currentAddress to Header
-        previousAddress = &Header;
-        currentAddress = Header.next;
+		previousAddress = &Header;
+		currentAddress = Header.next;
 
 		string sentinnel;
 
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 		for(int i = 0; i < numThreads; i++)
 		{
 			AddressNode* head = new AddressNode;
-			head->data = i;
+			head->data = 0;//i;
 			head->next = NULL;
 			addressArray[i] = head;
 		}
@@ -272,7 +272,11 @@ int main(int argc, char *argv[])
 
 			cout << "Current Address: " << current_address << endl;
 			cout << "\tSet: " << setLocation << "\n\tOffset: " << byteOffset << endl;
+			cout << "\tThread: " << setLocation % numThreads << endl;
+			cout << "\tThread Set: " << setLocation / 4 << endl;
 			getline(cin, sentinnel);
+
+			
 
 		}
 
