@@ -8,6 +8,8 @@
 #include <ctime>
 #include <unistd.h>
 
+#define MAX_THREADS 8
+
 using namespace std;
 
 struct AddressNode
@@ -56,7 +58,7 @@ int main(int argc, char *argv[])
 	int size = 1024, block_size = 32, associativity = 1; // hold program arguments
 	
 //    vector<int> address;	// used for address loads
-	int current_address = 0, prev = 0;
+	int current_address = 0, previous_address = 0;
 	int cache_hit = 0, cache_miss = 0, LRU;
 	bool found = false;
 
@@ -151,9 +153,6 @@ int main(int argc, char *argv[])
 					abort();
 			}
 		}
-
-		//************************* exception handling logic *********************
-
 		if(!tflag)
 		{
 			error = "Option '-t' is required.\n";
@@ -165,8 +164,43 @@ int main(int argc, char *argv[])
 			throw error;
 		}
 
-		//************************* exception handling logic *********************
+
+/****************************** Linked List Creation ****************************/
+		// determine set and block dimensions
+		numBlocks = size / block_size;
+		numSets = numBlocks / associativity;
+
+		int numThreads;
+		if(numSets >= MAX_THREADS)
+		{
+			numThreads = MAX_THREADS;
+		}
+		else
+		{
+			numThreads = numSets;
+		}
+
+		AddressNode** headArray = new AddressNode*[numThreads];
+		AddressNode** previousArray = new AddressNode*[numThreads];
+		AddressNode** currentArray = new AddressNode*[numThreads];
+		for(int i = 0; i < numThreads; i++)
+		{
+			AddressNode* head = new AddressNode;
+			head->data = 0;//i;
+			head->next = NULL;
+			headArray[i] = head;
 			
+			previousArray[i] = headArray[i];
+			currentArray[i] = headArray[i]->next;
+			while(currentArray[i] != NULL) // move to end of list
+			{
+				previousArray[i] = currentArray[i];
+				currentArray[i] = currentArray[i]->next;
+			}
+		}
+
+
+/****************************** File Read Logic ****************************/		
 
 		// loads input file, throws exception if it doesn't exist
 		ifstream infile(input_trace_file.c_str());
@@ -178,34 +212,32 @@ int main(int argc, char *argv[])
              throw error;
         }
 
-
-        //////// Link List Address Loading
-        previousAddress = &Header;
-        currentAddress = Header.next;
-        while(currentAddress != NULL) //moves to end of list
-        {
-             previousAddress = currentAddress;
-             currentAddress = currentAddress->next;
-        }
-			
-
+		// Read file and load to appropriate linked list
 		while( (!infile.eof()) && (infile.good()) )
 		{
+			// Grab the next address from the file
 			infile.getline(fileRead, 80);
+
+			// calculate the absolute address
+			current_address = previous_address + atoi(fileRead);
+			previous_address = current_address;
+
+			// determine which thread list to place address in
+			int threadNum = ((current_address / block_size)%(numSets)) % numThreads;
 			
 			// Create new node to hold current address read from file
 			newAddress = (struct AddressNode *)malloc(sizeof(struct AddressNode));
-			newAddress->data = previousAddress->data + atoi(fileRead); // Make sure address is absolute rather than relative
+			newAddress->data = current_address;
 			newAddress->next = NULL;
 			
 			// insert the newAddress into the end of the list
 			// since previous and current point to the last address and null pointer
-			previousAddress->next = newAddress;
-			newAddress->next = currentAddress;
+			previousArray[threadNum]->next = newAddress;
+			newAddress->next = currentArray[threadNum];
 			
 			// move down to last address again so you don't overwrite
-			previousAddress = newAddress;
-			currentAddress = newAddress->next;
+			previousArray[threadNum] = newAddress;
+			currentArray[threadNum] = newAddress->next;
 			
 			numLoads++;
 		}
@@ -213,38 +245,17 @@ int main(int argc, char *argv[])
 /**************** Added code ***************************/
 
 		// reset previousAddress/currentAddress to Header
-		previousAddress = &Header;
-		currentAddress = Header.next;
+		for(int i = 0; i < numThreads; i++)
+		{
+			previousArray[i] = headArray[i];
+			currentArray[i] = headArray[i]->next;
+		}
 
 		string sentinnel;
 
-		// determine set and block dimensions
-		numBlocks = size / block_size;
-		numSets = numBlocks / associativity;
-
-		int numThreads;
-		if(numSets >= 4)
-		{
-			numThreads = 4;
-		}
-		else
-		{
-			numThreads = numSets;
-		}
-
-		AddressNode** addressArray = new AddressNode*[numThreads];
-		//(AddressNode*) malloc(sizeof(AddressNode)*numThreads);
 		for(int i = 0; i < numThreads; i++)
 		{
-			AddressNode* head = new AddressNode;
-			head->data = 0;//i;
-			head->next = NULL;
-			addressArray[i] = head;
-		}
-
-		for(int i = 0; i < numThreads; i++)
-		{
-			cout << "Thread " << i << ": " << addressArray[i]->data << "\t" << addressArray[i] << "\t" << &addressArray[i] << endl;
+			cout << "Thread " << i << ": " << headArray[i]->data << "\t" << headArray[i] << "\t" << &headArray[i] << endl;
 		}
 
 		// pre-sim output
@@ -256,31 +267,45 @@ int main(int argc, char *argv[])
 
 		cout << "Number of sets: " << numSets << endl;
 
-		while(currentAddress->next != NULL)
+		int* countArray = new int[numThreads];
+		for(int i = 0; i < numThreads; i++)
 		{
-			// collect next address call
-			current_address = currentAddress->data;
+			cout << "Thread " << i << ":\n";
 
-			// move to next AddressNode for next load
-			previousAddress = currentAddress;
-			currentAddress = currentAddress->next;
+			countArray[i] = 1;
 
-			// determine location to place in cache
-			setLocation = (current_address / block_size)%(numSets);
-			byteOffset = current_address % block_size;
+			while(currentArray[i]->next != NULL)
+			{
+				// collect next address call
+				current_address = currentArray[i]->data;
 
+				// move to next AddressNode for next load
+				previousArray[i] = currentArray[i];
+				currentArray[i] = currentArray[i]->next;
 
-			cout << "Current Address: " << current_address << endl;
-			cout << "\tSet: " << setLocation << "\n\tOffset: " << byteOffset << endl;
-			cout << "\tThread: " << setLocation % numThreads << endl;
-			cout << "\tThread Set: " << setLocation / 4 << endl;
-			getline(cin, sentinnel);
+				// determine location to place in cache
+				setLocation = (current_address / block_size)%(numSets);
+				byteOffset = current_address % block_size;
 
-			
-
+				/*
+				cout << "Current Address: " << current_address << endl;
+				cout << "\tSet: " << setLocation << "\n\tOffset: " << byteOffset << endl;
+				cout << "\tThread: " << setLocation % numThreads << endl;
+				cout << "\tThread Set: " << setLocation / MAX_THREADS << endl;
+				getline(cin, sentinnel);
+				*/
+				countArray[i]++;
+			}
+			cout << "\tCount: " << countArray[i] << endl;
 		}
+	int count = 0;
+	for(int i = 0; i < numThreads; i++)
+	{
+		count += countArray[i];
+	}
+	cout << "\nTotal: " << count << endl;
 
-/**************** Added code ***************************/
+/**************** End of Added code ***************************/
 		
 /*	
 		// determine set and block dimensions
