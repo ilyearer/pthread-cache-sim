@@ -8,15 +8,25 @@
 #include <ctime>
 #include <unistd.h>
 
+#include <pthread.h>
+
 #define MAX_THREADS 8
 
 using namespace std;
+
+pthread_mutex_t mutex;
 
 struct AddressNode
 {
      int data;
      struct AddressNode *next;
 }Header = {0, NULL}, *newAddress, *currentAddress, *previousAddress, *temp;
+
+struct pthread_arg
+{
+	AddressNode* head;
+	pthread_t thread;	
+};
 
 
 int IsPowerOfTwo (unsigned int x)
